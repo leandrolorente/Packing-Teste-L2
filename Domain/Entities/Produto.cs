@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,13 +9,15 @@ namespace Domain.Entities
 {
     public class Produto
     {
-        public string ProdutoId { get; private set; }
-        public Dimensao Dimensao { get; private set; }
+        
+        public string Produto_id { get; private set; }
+        
+        public Dimensao Dimensoes { get; private set; }
 
-        public Produto(string produtoId, Dimensao dimensao)
+        public Produto(string produto_id, Dimensao dimensoes)
         {
-            ProdutoId = produtoId;
-            Dimensao = dimensao;
+            Produto_id = produto_id;
+            Dimensoes = dimensoes;
         }
     }
 }

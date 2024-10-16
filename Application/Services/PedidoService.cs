@@ -25,7 +25,7 @@ namespace Application.Services
             throw new NotImplementedException();
         }
 
-        public Task<Pedido> ObterPedidoPorIdAsync(int pedidoId)
+        public Task<Pedido> ObterPedidoPorIdAsync(int pedido_id)
         {
             throw new NotImplementedException();
         }

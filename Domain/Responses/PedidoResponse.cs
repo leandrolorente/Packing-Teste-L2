@@ -6,10 +6,9 @@ using System.Threading.Tasks;
 
 namespace Domain.Responses
 {
-    public class ProcessarPedidoResponse
+    public class PedidoResponse
     {
-        public List<PedidoResponse> Pedidos { get; set; } = new List<PedidoResponse>();
+        public int Pedido_id { get; set; }
+        public List<CaixaResponse> Caixas { get; set; } = new List<CaixaResponse>();
     }
-
-    
 }

@@ -24,10 +24,10 @@ namespace Application.Commands.ProcessarPedido
 
             var applicationResponse = new ProcessarPedidoResponse
             {
-                Pedidos = domainResponse.Pedidos.Select(p => new ResultadoPedido
+                Pedidos = domainResponse.Pedidos.Select(p => new PedidoResponse
                 {
-                    PedidoId = p.PedidoId,
-                    Caixas = p.Caixas.Select(c => new ResultadoCaixa
+                    Pedido_id = p.Pedido_id,
+                    Caixas = p.Caixas.Select(c => new CaixaResponse
                     {
                         CaixaId = c.CaixaId,
                         Produtos = c.Produtos,

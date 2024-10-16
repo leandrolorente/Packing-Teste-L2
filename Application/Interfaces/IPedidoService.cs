@@ -33,8 +33,8 @@ namespace Application.Interfaces
         /// <summary>
         /// Obtém detalhes de um pedido específico.
         /// </summary>
-        /// <param name="pedidoId">O ID do pedido.</param>
+        /// <param name="pedido_id">O ID do pedido.</param>
         /// <returns>Os detalhes do pedido.</returns>
-        Task<Pedido> ObterPedidoPorIdAsync(int pedidoId);
+        Task<Pedido> ObterPedidoPorIdAsync(int pedido_id);
     }
 }
