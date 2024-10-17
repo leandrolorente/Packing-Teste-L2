@@ -1,5 +1,6 @@
 ﻿using Application.Commands.ProcessarPedido;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Packing.Controllers
@@ -19,6 +20,7 @@ namespace Packing.Controllers
         /// Processa os pedidos e determina as melhores caixas para embalagem.
         /// </summary>
         [HttpPost("processar")]
+        [Authorize]
         public async Task<IActionResult> ProcessarPedidos([FromBody] ProcessarPedidoCommand command)
         {
             var result = await _mediator.Send(command);
