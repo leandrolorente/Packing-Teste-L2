@@ -11,7 +11,6 @@ namespace Domain.Services
 {
     public class PedidoPackingService : IPedidoPackingService
     {
-        // Definição das caixas pela capacidade em volume (altura * largura * comprimento)
         private readonly Dictionary<TipoCaixa, (double Altura, double Largura, double Comprimento)> _caixas = new Dictionary<TipoCaixa, (double, double, double)>
         {
             { TipoCaixa.Caixa1, (30, 40, 80) },
@@ -19,11 +18,6 @@ namespace Domain.Services
             { TipoCaixa.Caixa3, (50, 80, 60) }
         };
 
-        /// <summary>
-        /// Processa uma lista de pedidos e faz o empacotamento dos produtos em caixas disponíveis.
-        /// </summary>
-        /// <param name="pedidos">Lista de pedidos a serem empacotados.</param>
-        /// <returns>Retorna uma resposta com os produtos empacotados por caixa.</returns>
         public async Task<ProcessarPedidoResponse> ProcessarPedidosAsync(List<Pedido> pedidos)
         {
             var response = new ProcessarPedidoResponse();
@@ -31,18 +25,17 @@ namespace Domain.Services
             foreach (var pedido in pedidos)
             {
                 var pedidoResponse = new PedidoResponse { Pedido_id = pedido.Pedido_id };
+                var produtosOrdenados = pedido.Produtos.OrderByDescending(p => CalcularVolume(p.Dimensoes.Altura, p.Dimensoes.Largura, p.Dimensoes.Comprimento)).ToList();
 
-                // Agrupa os produtos em caixas
-                foreach (var produto in pedido.Produtos)
+                foreach (var produto in produtosOrdenados)
                 {
-                    var caixaId = EmpacotarProduto(produto);
+                    var caixaId = EmpacotarProduto(pedidoResponse, produto, pedidos);
                     if (!string.IsNullOrEmpty(caixaId))
                     {
                         AdicionarProdutoNaCaixa(pedidoResponse, caixaId, produto.Produto_id);
                     }
                     else
                     {
-                        // Produto não cabe em nenhuma caixa
                         pedidoResponse.Caixas.Add(new CaixaResponse
                         {
                             CaixaId = null,
@@ -58,58 +51,112 @@ namespace Domain.Services
             return await Task.FromResult(response);
         }
 
-        /// <summary>
-        /// Empacota o produto na caixa mais adequada com base nas dimensões.
-        /// </summary>
-        /// <param name="produto">Produto a ser empacotado.</param>
-        /// <returns>O identificador da caixa onde o produto foi empacotado ou null se o produto não couber.</returns>
-        private string EmpacotarProduto(Produto produto)
+        private string EmpacotarProduto(PedidoResponse pedidoResponse, Produto produto, List<Pedido> pedidos)
         {
-            // Tenta encontrar a caixa que comporte o produto
-            foreach (var caixa in _caixas)
+            foreach (var caixa in _caixas.OrderBy(c => CalcularVolume(c.Value.Altura, c.Value.Largura, c.Value.Comprimento)))
             {
-                if (ProdutoCabeNaCaixa(produto.Dimensoes, caixa.Value))
+                var caixaExistente = pedidoResponse.Caixas.FirstOrDefault(c => c.CaixaId == caixa.Key.ToString() && ProdutoCabeNaCaixa(produto, caixa.Value, c, pedidos));
+
+                if (caixaExistente != null)
+                {
+                    return caixaExistente.CaixaId;
+                }
+
+                if (ProdutoCabeNaCaixa(produto, caixa.Value, null, pedidos))
                 {
                     return caixa.Key.ToString();
                 }
             }
-
-            // Se o produto não caber em nenhuma caixa
             return null;
         }
 
-        /// <summary>
-        /// Verifica se o produto cabe na caixa especificada.
-        /// </summary>
-        /// <param name="dimensoesProduto">Dimensões do produto.</param>
-        /// <param name="dimensoesCaixa">Dimensões da caixa.</param>
-        /// <returns>True se o produto couber na caixa; caso contrário, False.</returns>
-        private bool ProdutoCabeNaCaixa(Dimensao dimensoesProduto, (double Altura, double Largura, double Comprimento) dimensoesCaixa)
+        private bool ProdutoCabeNaCaixa(Produto produto, (double Altura, double Largura, double Comprimento) dimensoesCaixa, CaixaResponse caixaExistente, List<Pedido> pedidos)
         {
-            // Verifica se o produto cabe dentro da caixa, considerando todas as orientações possíveis
-            return (dimensoesProduto.Altura <= dimensoesCaixa.Altura &&
-                    dimensoesProduto.Largura <= dimensoesCaixa.Largura &&
-                    dimensoesProduto.Comprimento <= dimensoesCaixa.Comprimento) ||
-                   (dimensoesProduto.Altura <= dimensoesCaixa.Largura &&
-                    dimensoesProduto.Largura <= dimensoesCaixa.Comprimento &&
-                    dimensoesProduto.Comprimento <= dimensoesCaixa.Altura) ||
-                   (dimensoesProduto.Altura <= dimensoesCaixa.Comprimento &&
-                    dimensoesProduto.Largura <= dimensoesCaixa.Altura &&
-                    dimensoesProduto.Comprimento <= dimensoesCaixa.Largura);
+            double volumeDisponivel = CalcularVolume(dimensoesCaixa.Altura, dimensoesCaixa.Largura, dimensoesCaixa.Comprimento);
+            double volumeProduto = CalcularVolume(produto.Dimensoes.Altura, produto.Dimensoes.Largura, produto.Dimensoes.Comprimento);
+
+            double alturaMaxOcupada = 0;
+            double larguraTotalOcupada = 0;
+            double comprimentoTotalOcupado = 0;
+
+            if (caixaExistente != null)
+            {
+                foreach (var produtoId in caixaExistente.Produtos)
+                {
+                    var produtoExistente = ObterProdutoPorId(pedidos, produtoId);
+                    volumeDisponivel -= CalcularVolume(produtoExistente.Dimensoes.Altura, produtoExistente.Dimensoes.Largura, produtoExistente.Dimensoes.Comprimento);
+
+                    alturaMaxOcupada = Math.Max(alturaMaxOcupada, produtoExistente.Dimensoes.Altura);
+                    larguraTotalOcupada += produtoExistente.Dimensoes.Largura;
+                    comprimentoTotalOcupado = Math.Max(comprimentoTotalOcupado, produtoExistente.Dimensoes.Comprimento);
+                }
+            }
+
+            if (volumeProduto > volumeDisponivel)
+            {
+                return false;
+            }
+
+            return ProdutoCabeNasDimensoes(produto.Dimensoes, dimensoesCaixa) &&
+                   VerificarOrientacao(produto.Dimensoes.Altura, produto.Dimensoes.Largura, produto.Dimensoes.Comprimento,
+                                       dimensoesCaixa, comprimentoTotalOcupado, larguraTotalOcupada, alturaMaxOcupada);
         }
 
-        /// <summary>
-        /// Adiciona o produto na caixa do pedido correspondente.
-        /// </summary>
-        /// <param name="pedidoResponse">Resposta do pedido.</param>
-        /// <param name="caixaId">Identificador da caixa.</param>
-        /// <param name="produtoId">Identificador do produto.</param>
+        private bool ProdutoCabeNasDimensoes(Dimensao produtoDimensoes, (double Altura, double Largura, double Comprimento) caixaDimensoes)
+        {
+            return (produtoDimensoes.Altura <= caixaDimensoes.Altura && produtoDimensoes.Largura <= caixaDimensoes.Largura && produtoDimensoes.Comprimento <= caixaDimensoes.Comprimento) ||
+                   (produtoDimensoes.Altura <= caixaDimensoes.Altura && produtoDimensoes.Largura <= caixaDimensoes.Comprimento && produtoDimensoes.Comprimento <= caixaDimensoes.Largura) ||
+                   (produtoDimensoes.Altura <= caixaDimensoes.Largura && produtoDimensoes.Largura <= caixaDimensoes.Altura && produtoDimensoes.Comprimento <= caixaDimensoes.Comprimento) ||
+                   (produtoDimensoes.Altura <= caixaDimensoes.Largura && produtoDimensoes.Largura <= caixaDimensoes.Comprimento && produtoDimensoes.Comprimento <= caixaDimensoes.Altura) ||
+                   (produtoDimensoes.Altura <= caixaDimensoes.Comprimento && produtoDimensoes.Largura <= caixaDimensoes.Altura && produtoDimensoes.Comprimento <= caixaDimensoes.Largura) ||
+                   (produtoDimensoes.Altura <= caixaDimensoes.Comprimento && produtoDimensoes.Largura <= caixaDimensoes.Largura && produtoDimensoes.Comprimento <= caixaDimensoes.Altura);
+        }
+
+        private bool VerificarOrientacao(double alturaProduto, double larguraProduto, double comprimentoProduto, (double Altura, double Largura, double Comprimento) dimensoesCaixa, double comprimentoTotalOcupado, double larguraTotalOcupada, double alturaMaxOcupada)
+        {
+            bool cabeLadoALado = alturaProduto <= dimensoesCaixa.Altura &&
+                                 larguraTotalOcupada + larguraProduto <= dimensoesCaixa.Largura &&
+                                 comprimentoTotalOcupado <= dimensoesCaixa.Comprimento;
+
+            bool cabeEmpilhado = alturaMaxOcupada + alturaProduto <= dimensoesCaixa.Altura &&
+                                 larguraProduto <= dimensoesCaixa.Largura &&
+                                 comprimentoTotalOcupado <= dimensoesCaixa.Comprimento;
+
+            bool cabeRotacionado = alturaProduto <= dimensoesCaixa.Altura &&
+                                   larguraTotalOcupada + comprimentoProduto <= dimensoesCaixa.Largura &&
+                                   larguraProduto <= dimensoesCaixa.Comprimento;
+
+            bool cabeRotacionadoEmpilhado = alturaMaxOcupada + alturaProduto <= dimensoesCaixa.Altura &&
+                                            comprimentoProduto <= dimensoesCaixa.Largura &&
+                                            larguraProduto <= dimensoesCaixa.Comprimento;
+
+            return cabeLadoALado || cabeEmpilhado || cabeRotacionado || cabeRotacionadoEmpilhado;
+        }
+
+        private double CalcularVolume(double altura, double largura, double comprimento)
+        {
+            return altura * largura * comprimento;
+        }
+
+        private Produto ObterProdutoPorId(List<Pedido> pedidos, string produtoId)
+        {
+            foreach (var pedido in pedidos)
+            {
+                var produtoEncontrado = pedido.Produtos.FirstOrDefault(p => p.Produto_id == produtoId);
+                if (produtoEncontrado != null)
+                {
+                    return produtoEncontrado;
+                }
+            }
+            return null;
+        }
+
         private void AdicionarProdutoNaCaixa(PedidoResponse pedidoResponse, string caixaId, string produtoId)
         {
             var caixa = pedidoResponse.Caixas.FirstOrDefault(c => c.CaixaId == caixaId);
             if (caixa == null)
             {
-                caixa = new CaixaResponse { CaixaId = caixaId };
+                caixa = new CaixaResponse { CaixaId = caixaId, Produtos = new List<string>() };
                 pedidoResponse.Caixas.Add(caixa);
             }
 
